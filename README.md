@@ -21,7 +21,22 @@ console.log(b)
 ```
 简单的两个变量，当a变更时，命令式的通过一个赋值表达式更新b的值。确实很简陋对吧，现在升级下，把重复出现的赋值表达式封装成函数就有了v2版本。
 
+## v2
 
+```js
+let a = 10
+let b
+function update() {
+    b = a + 10
+    console.log(b)
+}
+
+update()
+b = 20
+update()
+```
+
+好像依然简陋，能不能不要每次变量变更都手动调用`update()`呢？可以，我们用`@vue/reactivity`模块，看v3版本。
 
 
 
