@@ -38,5 +38,21 @@ update()
 
 好像依然简陋，能不能不要每次变量变更都手动调用`update()`呢？可以，我们用`@vue/reactivity`模块，看v3版本。
 
+## v3
 
+```js
+const { reactive, effect } = require('@vue/reactivity')
+
+let a = reactive({
+  value: 10
+})
+let b
+effect(() => {
+  b = a.value + 10
+  console.log(b)
+})
+a.value = 20
+```
+
+使用了`@vue/reactivity`模块的`reactive`和`effect`方法，这样每次响应式数据发生变更时，都会自动执行副作用函数（相当于v2版本中的update方法）。接下来我们来自己实现这个响应式系统。
 
