@@ -56,7 +56,7 @@ a.value = 20
 
 使用了`@vue/reactivity`模块的`reactive`和`effect`方法，这样每次响应式数据发生变更时，都会自动执行副作用函数（相当于v2版本中的update方法）。接下来我们来自己实现这个响应式系统。
 
-## 初步实现Dep和effectWatch
+## v4 初步实现Dep和effectWatch
 
 Vue的响应式最核心的点就是**收集依赖**和**触发依赖**。简单来说，当触发响应式数据的getter的时候收集依赖（这里可以简单理解为把v2版本中的update方法保存起来），当触发响应式数据的setter的时候触发依赖通知更新（这里可以简单理解为调用v2版本的update方法）。下面我们就来实现`Dep`类和副作用方法`effectWatch`：
 
@@ -123,6 +123,77 @@ dep.value = 20
 
 至此，调用过程分析清楚了，看起来很像Vue3的`ref`API了，接下来我们实现`reactive`API。
 
+# v5 实现reactive
+
+```js
+// 源码实现
+let targetMap = new Map()
+export function reactive(raw) {
+  // target是对象，key是对象的key
+  // targetMap是以对象为key，depsMap为值的Map
+  // depsMap是以对象的key为key，dep实例为值的Map
+  const getDep = (target, key) => {
+    // 先以对象为key获取targetMap上存储的depsMap
+    let depsMap = targetMap.get(target)
+    // 如果获取不到，需要初始化一个depsMap存储到targetMap上
+    if (!targetMap.get(target)) {
+      depsMap = new Map()
+      targetMap.set(target, depsMap)
+    }
+    // 以对象的key为key，获取depsMap上存储的dep实例
+    let dep = depsMap.get(key)
+    // 如果获取不到，需要初始化dep实例存储到depsMap上
+    if (!depsMap.get(key)) {
+      dep = new Dep()
+      depsMap.set(key, dep)
+    }
+    return dep
+  }
+
+  return new Proxy(raw, {
+    get(target, key) {
+      const dep = getDep(target, key)
+      // 在getter中 收集依赖
+      dep.depend()
+      return Reflect.get(target, key)
+    },
+    set(target, key, value) {
+      const dep = getDep(target, key)
+      const result = Reflect.set(target, key, value)
+      // 在setter中 通知更新
+      dep.notice()
+      return result
+    }
+  })
+}
+```
+
+```js
+// 测试用例
+import { reactive, effectWatch } from './core/reactivity/index.js'
+
+const user = reactive({
+  age: 18
+})
+effectWatch(() => {
+  const double = user.age * 2
+  console.log(double)
+})
+user.age++
+```
+
+在vue3中reactive使用Proxy来代理对象实现响应式。首先明确代码中的几个概念：
+
+- target: 被代理的对象
+- key: 被代理的对象上的属性key
+- targetMap: 一个全局的Map数据结构，用来保存被代理对象上的依赖集合，其key是被代理的对象target，值是depsMap
+- depsMap: 一个Map数据结构，每个被代理的对象都有一个depsMap，用来保存其依赖dep实例，其key是对象的key，值是dep实例。
+
+调用`reactive()`会返回一个被代理的响应式对象。当触发对象上某个key的getter时，先**获取这个key对应的dep实例**，然后调用`dep.depend()`收集依赖。当触发对象上某个key的setter时，先获取这个key对应的dep实例，然后调用`dep.notice`触发依赖通知更新。
+
+上面**获取dep实例*的过程(`getDep()`)是：先通过target获取到全局targetMap上存储的depsMap，如果没有，就先创建depsMap在存储。然后通过key获取到depsMap上保存的dep实例，如果没有就先创建dep实例再存储。
+
+至此，reactive也基本分析完了。
 
 
 
