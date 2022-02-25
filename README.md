@@ -328,3 +328,88 @@ effectWatch(() => {
 `h`函数接收三个参数，分别是标签名tag、属性集合对象props、子元素children，最终返回的vdom，其实就是一个对象，用对象来表示真实的对象。
 
 这样`render`函数内最终返回的就是由`h()`函数生成的vdom，然后在`createApp`函数内，我们再调用`mountElement`函数把vdom生成真实的dom插入到根容器中，这个函数中需要注意的点是：如果children是一个数组，需要遍历这个数组，并递归调用`mountElement`来把vdom中的所有children都生成对应的真实dom。
+
+## v7实现虚拟dom的h函数和mountElement函数
+
+```js
+// /core/h.js
+export function h(tag, props, children) {
+  return {
+    tag,
+    props,
+    children
+  }
+}
+```
+
+```js
+// /core/renderer/index.js
+export function mountElement(vnode, container) {
+  const { tag, props, children } = vnode
+
+  // 根据tag创建element
+  const el = document.createElement(tag)
+
+  if (props) {
+    // 如果有props，则遍历props，设置attribute
+    for (const key in props) {
+      const val = props[key]
+      el.setAttribute(key, val)
+    }
+  }
+
+  if (Array.isArray(children)) {
+    // 1. 如果children是数组，则递归
+    children.forEach(v => {
+      mountElement(v, el)
+    })
+  } else {
+    // 2. 否则，创建文本节点并插入
+    const textNode = document.createTextNode(children)
+    el.appendChild(textNode)
+  }
+
+  container.appendChild(el)
+}
+```
+
+```js
+// App.js
+// ...
+render(context) {
+  return h('div', null, context.state.count)
+},
+// ...
+```
+
+```js
+// /core/index.js
+// ...
+effectWatch(() => {
+  rootContainer.innerHTML = ''
+  const subTree = rootComponent.render(context)
+  mountElement(subTree, rootContainer)
+})
+// ...
+```
+
+`h`函数接收三个参数，分别是标签名tag、属性集合对象props、子元素children，最终返回的vdom，其实就是一个对象，用对象来表示真实的对象。
+
+这样`render`函数内最终返回的就是由`h()`函数生成的vdom，然后在`createApp`函数内，我们再调用`mountElement`函数把vdom生成真实的dom插入到根容器中，这个函数中需要注意的点是：如果children是一个数组，需要遍历这个数组，并递归调用`mountElement`来把vdom中的所有children都生成对应的真实dom。
+
+## v8 实现虚拟dom的diff算法
+
+v7版本还有一个缺点，我们看`core/index.js`里的`mountElement(subTree, rootContainer)`这句代码。当数据发生变更时，rootContainer下的dom是被全量替换的，即使实际发生变更的可能只是其中某个节点或某个属性。在控制台Element面板中也可以看到整个节点销毁到生成一闪而过的现象。要解决这个问题就要用到diff算法了。
+
+这个过程是：
+
+1. 在`createApp`的`mount()`阶段，通过维护一个标志位来判断是否是初始化，是就执行`mountElement()`，不是就执行`diff()`。需要注意：不管是不是初始化，都把这一次的VNode保存下来，作为一下次`diff()`操作的老的VNode。
+2. 接着执行`diff()`函数，这个函数依然是从`tag,props,children`三个维度来判断。过程不想说了，都写在代码注释里了，代码也不想贴了，github里都有。
+
+# 结语
+
+本来写这篇笔记的目的是想写成一篇教程的，这从我分不同文件夹记录源码可以看出。后来发现，这个过程用文字表达出来太繁琐了，成本太高。而且我发现这个过程必须得自己去认真看了视频理解消化后，自己敲一遍才有可能真的掌握，所以这篇就全当是记了一篇笔记了。
+
+最后是软广时间，[mini-vue](https://github.com/cuixiaorui/mini-vue)的作者现在推出了mini-vue的视频教程，这个教程会带着大家从环境搭建开始，一行行代码把整个仓库的代码都敲一遍，你最终也将可以手写一遍mini-vue。我报名了这个课程，感觉讲的很好。如果你也想了解报名这个课程，可以通过我下面这个邀请海报来报名，我将把邀请或得的佣金的一半返还给你。
+
+![](./screenshots/poster.jpg)
