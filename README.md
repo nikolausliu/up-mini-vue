@@ -195,6 +195,70 @@ user.age++
 
 至此，reactive也基本分析完了。
 
+# P2 setup&render
 
+## v6 初步实现setup与render
+
+到目前为止，我们实现的响应式都是通过`console.log`来打印数据，怎么实现视图与数据的绑定呢？接下来我们来实现vue3的setup与render。
+
+```html
+<div id="#app"></div>
+<script src="./index.js" type="module"></script>
+```
+
+```js
+// index.js
+import App from './App.js'
+import { createApp } from './core/index.js'
+createApp(App).mount(document.getElementById('app'))
+```
+
+```js
+// App.js
+import { reactive } from './core/reactivity/index.js'
+export default {
+  render(context) {
+    const div = document.createElement('div')
+    div.innerText = context.state.count
+    return div
+  },
+
+  setup() {
+    const state = reactive({
+      count: 0
+    })
+    window.state = state
+    return {
+      state
+    }
+  }
+}
+```
+
+```js
+// core/index.js
+import { effectWatch } from './reactivity/index.js'
+
+export function createApp(rootComponent) {
+  return {
+    mount(rootContainer) {
+      const context = rootComponent.setup()
+      effectWatch(() => {
+        const element = rootComponent.render(context)
+        rootContainer.innerHTML = ''
+        rootContainer.appendChild(element)
+      })
+    }
+  }
+}
+```
+
+上面的代码已经和vue3的初始代码很相似了。首先是`App.js`中定义了setup和render，render函数可以看成是我们实际`App.vue`中的模板部分，先不考虑vdom的实现，我们这里直接简单的返回一个div，div的文本由setup函数返回的响应式数据提供上下文，这样`App.render(App.setup())`就返回了一个文本节点为响应式对象的div，后面我们会消费这个div。
+
+接着我们来看`createApp`函数，与vue3的API保持一致，`createApp(App)`会返回一个有mount方法的对象，调用mount方法，会首先通过调用`rootComponent.setup()`获取到响应式对象上下文，然后调用`rootComponent.render(context)`获取到我们前面说过的创建的div，最后把div追加到根节点上。
+
+当然上一步需要被包裹在effectWatch中才能触发依赖收集，并在响应式数据发生变更时更新视图。此时我们在浏览器控制台输入`state.count++`可以看到界面的数字会从0开始递增。
+
+到目前为止我们简单地完成了响应式数据与视图的绑定，但是现在是直接销毁根容器内的dom并重新创建的，开销比较大，下面我们会实现vdom。
 
 
